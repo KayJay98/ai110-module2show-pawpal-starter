@@ -161,8 +161,6 @@ edited = st.data_editor(
     key="task_editor",
 )
 
-st.session_state.tasks = edited.to_dict("records")
-
 # Profile summary strip
 st.divider()
 col_a, col_b = st.columns(2)
@@ -198,7 +196,7 @@ if st.button("🐾  Generate Tail-Wagging Timeline", type="primary", width="stre
             return val is None or str(val).strip() == ""
 
     validation_errors = []
-    for row_idx, t in enumerate(st.session_state.tasks, start=1):
+    for row_idx, t in enumerate(edited.to_dict("records"), start=1):
         active_val = t.get("active", True)
         if active_val is False or active_val == 0:
             continue                          # unchecked rows are intentionally skipped
@@ -230,7 +228,7 @@ if st.button("🐾  Generate Tail-Wagging Timeline", type="primary", width="stre
 
     # Build Task objects
     task_objects: List[Task] = []
-    for t in st.session_state.tasks:
+    for t in edited.to_dict("records"):
         active_val = t.get("active", True)
         if active_val is False or active_val == 0:
             continue
