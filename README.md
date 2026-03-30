@@ -51,14 +51,24 @@ classDiagram
 
     %% ── Data Models ──────────────────────────────────────────
 
-    class CareTask {
+    class Task {
         +str name
+        +str description
         +int duration_minutes
         +int priority
         +str energy_level
         +str task_type
+        +str frequency
+        +bool completed
         +List~str~ tags
+        +Optional~date~ next_due_date
+        +str preferred_time
+        +__post_init__()
         +is_survival() bool
+        +is_due(today) bool
+        +mark_complete()
+        +reset()
+        +next_occurrence() Optional~Task~
     }
 
     class Pet {
@@ -66,67 +76,101 @@ classDiagram
         +str species
         +List~str~ favorites
         +List~str~ fears
+        +List~Task~ tasks
+        +add_task(task)
+        +remove_task(name)
+        +pending_tasks() List~Task~
+        +completed_tasks() List~Task~
+        +complete_task(name) Optional~Task~
+        +reset_day()
     }
 
     class Owner {
         +str name
         +int available_time_minutes
         +str energy_battery
+        +List~Pet~ pets
+        +add_pet(pet)
+        +remove_pet(name)
+        +get_pet(name) Pet
+        +all_tasks() List
+        +pending_tasks() List
     }
 
     %% ── Output Models ────────────────────────────────────────
 
     class ScheduledTask {
-        +CareTask task
+        +Task task
+        +Pet pet
         +str reason
         +bool locked
     }
 
     class SkippedTask {
-        +CareTask task
+        +Task task
+        +Pet pet
         +str reason
     }
 
     %% ── Scheduler Engine ─────────────────────────────────────
 
     class Scheduler {
-        +Pet pet
         +Owner owner
-        +List~CareTask~ tasks
+        +List~str~ warnings
         +build_schedule() Tuple
-        -_score(CareTask) float
-        -_search_terms(CareTask) List~str~
-        -_matches_pet_favorites(CareTask) List~str~
-        -_conflicts_with_fears(CareTask) List~str~
-        -_survival_reason() str
-        -_optional_reason(CareTask, List) str
+        -_score(task, pet) float
+        -_search_terms(task) List~str~
+        -_word_overlap(phrase, terms) bool
+        -_matches_pet_favorites(task, pet) List~str~
+        -_conflicts_with_fears(task, pet) List~str~
+        -_knapsack(candidates, capacity) List
+        -_interleave_by_pet(tasks) List~ScheduledTask~
+        -_survival_reason(pet) str
+        -_optional_reason(task, pet, favs) str
     }
 
-    %% ── Relationships ────────────────────────────────────────
+    %% ── Ownership / Composition ──────────────────────────────
 
-    Scheduler "1" --> "1" Pet           : profiles
-    Scheduler "1" --> "1" Owner         : profiles
-    Scheduler "1" --> "0..*" CareTask   : receives tasks
+    Owner  "1" o-- "1..*" Pet  : manages
+    Pet    "1" o-- "0..*" Task : owns
 
-    Scheduler "1" ..> "0..*" ScheduledTask : produces
-    Scheduler "1" ..> "0..*" SkippedTask   : produces
+    %% ── Scheduler reads through the ownership chain ──────────
 
-    ScheduledTask "1" *-- "1" CareTask  : wraps
-    SkippedTask   "1" *-- "1" CareTask  : wraps
+    Scheduler "1" --> "1" Owner : reads via
 
-    Pet   ..> CareTask : favorites / fears\nfilter tasks
-    Owner ..> CareTask : energy + time\nshape ranking
+    %% ── Scheduler produces output models ─────────────────────
+
+    Scheduler ..> ScheduledTask : produces
+    Scheduler ..> SkippedTask   : produces
+
+    %% ── Output models wrap their source data ─────────────────
+
+    ScheduledTask *-- Task : wraps
+    ScheduledTask *-- Pet  : references
+    SkippedTask   *-- Task : wraps
+    SkippedTask   *-- Pet  : references
+
+    %% ── Auto-reschedule: Task creates its own next copy ──────
+
+    Task ..> Task : next_occurrence()
+
+    %% ── Pet delegates completion + rescheduling ──────────────
+
+    Pet ..> Task : complete_task()\ncreates next occurrence
 ```
 
 ### How the data flows
 
 | Step | What happens |
 |------|-------------|
-| **1. Input** | `Pet`, `Owner`, and a list of `CareTask` objects are passed into `Scheduler.__init__` |
-| **2. Lock survival** | `build_schedule` separates tasks where `priority == 1` or `task_type == "survival"` — these become locked `ScheduledTask` objects unconditionally |
-| **3. Score & rank** | Every remaining `CareTask` gets a float score: priority weight − energy-mismatch penalty + pet-favorites bonus − fear conflict penalty |
-| **4. Greedy fill** | Tasks are added in score order until `Owner.available_time_minutes` runs out; fear-conflicting tasks are skipped immediately |
-| **5. Output** | Returns `(List[ScheduledTask], List[SkippedTask], summary_note)` — each `ScheduledTask` carries a natural-language *Pet's Perspective* reason |
+| **1. Input** | An `Owner` (holding `Pet` objects, each holding `Task` objects) is passed into `Scheduler.__init__` |
+| **2. Due-date filter** | `build_schedule` calls `Owner.pending_tasks()` then drops any `Task` whose `next_due_date` is in the future; those go straight to the skipped list |
+| **3. Lock survival** | Tasks where `priority == 1` or `task_type == "survival"` are locked in unconditionally and sorted by `preferred_time`; a warning is added to `scheduler.warnings` if they exceed the time budget |
+| **4. Fear filter** | Remaining optional tasks are checked with `_conflicts_with_fears()` using whole-word token matching; conflicting tasks are skipped before scoring |
+| **5. Score & knapsack** | Each candidate is scored per-minute (`_score()`: priority weight − energy mismatch + favourites bonus + daily bonus), then `_knapsack()` selects the optimal subset that maximises total score within the remaining time |
+| **6. Interleave & sort** | Selected optional tasks are round-robin interleaved across pets by `_interleave_by_pet()`, with each pet's queue sorted by `preferred_time` (`morning → afternoon → evening`) |
+| **7. Output** | Returns `(List[ScheduledTask], List[SkippedTask], summary_note)`; `scheduler.warnings` holds any budget or free-time alerts |
+| **8. Completion** | Calling `pet.complete_task(name)` marks the task done and appends the next occurrence (via `Task.next_occurrence()`) with the due date advanced by the correct interval |
 
 ---
 
