@@ -548,13 +548,17 @@ class Scheduler:
                     reason=self._optional_reason(task, pet, matched),
                 ))
             else:
-                skipped.append(SkippedTask(
-                    task=task, pet=pet,
-                    reason=(
+                if task.duration_minutes > max(0, time_left):
+                    reason = (
+                        f"Couldn't fit — needs {task.duration_minutes} min but only "
+                        f"{max(0, time_left)} min remain in {self.owner.name}'s schedule."
+                    )
+                else:
+                    reason = (
                         "Not selected — the optimal schedule fills available time "
                         "more efficiently without this task."
-                    ),
-                ))
+                    )
+                skipped.append(SkippedTask(task=task, pet=pet, reason=reason))
 
         # ── Improvements #1 & #11: interleave optional tasks across pets by time ─
         survival_scheduled = [s for s in scheduled if s.locked]

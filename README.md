@@ -153,3 +153,41 @@ Calling `pet.complete_task(name)` marks a task done and immediately appends a **
 **Guardrails and visibility**
 
 `Task.__post_init__` validates that `priority` is in the range 1–5 at construction time, raising a `ValueError` before a bad value can silently distort scoring. `Owner.all_tasks()` and `Pet.add_task()` deduplicate by object identity, so sharing a `Task` object across pets never produces a double-scheduled entry. After every `build_schedule()` call, `scheduler.warnings` holds plain-English alerts — including a budget warning when survival tasks alone exceed the owner's available time, and a free-time summary showing how many minutes remain.
+
+---
+
+## Testing PawPal+
+
+### Run the tests
+
+```bash
+python -m pytest
+```
+
+To see each test name as it runs:
+
+```bash
+python -m pytest -v
+```
+
+### What the tests cover
+
+The suite has **64 tests** across two files (`test_logic.py` and `tests/test_pawpal.py`) and covers every major class and scheduling behaviour:
+
+| Area | What is tested |
+|---|---|
+| **Task** | Attributes stored correctly, `completed` defaults to `False`, `mark_complete()` / `reset()` toggle the flag, `is_survival()` returns `True` for priority-1 and `task_type="survival"` tasks |
+| **Pet** | `add_task()` / `remove_task()`, `pending_tasks()` excludes completed tasks, `completed_tasks()` returns only done tasks, `reset_day()` clears all flags |
+| **Owner** | `add_pet()` / `remove_pet()` / `get_pet()`, `get_pet()` raises `ValueError` for unknown names, `pending_tasks()` aggregates correctly across multiple pets and excludes completed tasks |
+| **Survival tasks** | Always appear in the schedule even when available time is nearly zero, always carry `locked=True`, are never blocked by fear filters |
+| **Fear filtering** | Tasks whose tags overlap with a pet's fears are skipped, the skip reason names the fear, non-feared tasks are unaffected, fear is enforced even with unlimited time |
+| **Time constraints** | Tasks that exceed available time are skipped, the skip reason states the duration needed and the minutes remaining, a task that fits exactly on the budget is always included, total scheduled time never exceeds `available_time_minutes` |
+| **Priority & scoring** | Higher-priority tasks beat lower-priority ones when only one slot exists, a pet-favourite task is preferred over a same-priority non-favourite, the Pet's Perspective reason names the matched favourite |
+| **Energy matching** | A low-energy owner gets low-energy tasks ranked above high-energy ones of equal priority, a high-energy owner schedules high-energy tasks without penalty |
+| **Summary note** | The closing note changes wording based on owner energy level (`"easy day"` vs `"maximum paw-tential"`) |
+
+### Confidence level
+
+**4 / 5 stars**
+
+The core scheduling contract — survival locking, fear filtering, time budgeting, priority/energy/favourites scoring — is thoroughly tested and all 64 tests pass. One star is withheld because the newer features added in the Smarter Scheduling upgrade (knapsack optimality, round-robin pet interleaving, `preferred_time` sort order, `next_due_date` deferral, and `complete_task()` auto-rescheduling) do not yet have dedicated tests. The logic runs correctly as shown in the terminal demo, but without automated assertions a future change could quietly break those behaviours.
