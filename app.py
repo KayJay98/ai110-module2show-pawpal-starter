@@ -3,24 +3,24 @@ import pandas as pd
 import urllib.parse
 from typing import List
 from pawpal_system import (
-    ENERGY_LEVELS, TASK_TYPES,
-    CareTask, Pet, Owner, Scheduler,
+    ENERGY_LEVELS, TASK_TYPES, FREQUENCY,
+    Task, Pet, Owner, Scheduler,
 )
 
 
 # ─── Default tasks ──────────────────────────────────────────────────────────────
 
 DEFAULT_TASKS = [
-    {"active": True, "name": "Morning Feeding",        "duration": 10, "priority": 1, "energy": "Low",    "type": "survival", "tags": "food,feeding,meal,morning"},
-    {"active": True, "name": "Evening Feeding",        "duration": 10, "priority": 1, "energy": "Low",    "type": "survival", "tags": "food,feeding,meal,evening"},
-    {"active": True, "name": "Medication",             "duration": 5,  "priority": 1, "energy": "Low",    "type": "survival", "tags": "medication,meds,health"},
-    {"active": True, "name": "Morning Walk",           "duration": 30, "priority": 2, "energy": "High",   "type": "hobby",    "tags": "outdoor,walk,exercise,morning"},
-    {"active": True, "name": "Fetch with Tennis Ball", "duration": 20, "priority": 3, "energy": "High",   "type": "hobby",    "tags": "fetch,tennis ball,play,outdoor,exercise"},
-    {"active": True, "name": "Grooming & Brush",       "duration": 15, "priority": 2, "energy": "Medium", "type": "care",     "tags": "grooming,brush,hygiene,coat"},
-    {"active": True, "name": "Laser Pointer Play",     "duration": 10, "priority": 3, "energy": "Low",    "type": "hobby",    "tags": "play,indoor,laser,light"},
-    {"active": True, "name": "Training Session",       "duration": 20, "priority": 3, "energy": "Medium", "type": "hobby",    "tags": "training,mental,tricks,focus"},
-    {"active": True, "name": "Sniff & Explore Walk",   "duration": 25, "priority": 3, "energy": "Medium", "type": "hobby",    "tags": "outdoor,sniff,explore,walk,enrichment"},
-    {"active": True, "name": "Cuddle & Calm Time",     "duration": 15, "priority": 4, "energy": "Low",    "type": "hobby",    "tags": "cuddle,indoor,calm,relax,cozy"},
+    {"active": True, "name": "Morning Feeding",        "description": "Fill bowl with daily food portion",          "duration": 10, "priority": 1, "energy": "Low",    "type": "survival", "frequency": "daily",      "tags": "food,feeding,meal,morning"},
+    {"active": True, "name": "Evening Feeding",        "description": "Second meal of the day",                     "duration": 10, "priority": 1, "energy": "Low",    "type": "survival", "frequency": "daily",      "tags": "food,feeding,meal,evening"},
+    {"active": True, "name": "Medication",             "description": "Administer prescribed daily medication",      "duration": 5,  "priority": 1, "energy": "Low",    "type": "survival", "frequency": "daily",      "tags": "medication,meds,health"},
+    {"active": True, "name": "Morning Walk",           "description": "Outdoor walk for exercise and bathroom needs","duration": 30, "priority": 2, "energy": "High",   "type": "hobby",    "frequency": "daily",      "tags": "outdoor,walk,exercise,morning"},
+    {"active": True, "name": "Fetch with Tennis Ball", "description": "High-energy fetch session in the yard",       "duration": 20, "priority": 3, "energy": "High",   "type": "hobby",    "frequency": "daily",      "tags": "fetch,tennis ball,play,outdoor,exercise"},
+    {"active": True, "name": "Grooming & Brush",       "description": "Brush coat and check for tangles",            "duration": 15, "priority": 2, "energy": "Medium", "type": "care",     "frequency": "weekly",     "tags": "grooming,brush,hygiene,coat"},
+    {"active": True, "name": "Laser Pointer Play",     "description": "Low-effort indoor play with laser toy",       "duration": 10, "priority": 3, "energy": "Low",    "type": "hobby",    "frequency": "daily",      "tags": "play,indoor,laser,light"},
+    {"active": True, "name": "Training Session",       "description": "Practice commands and tricks for mental stimulation","duration": 20, "priority": 3, "energy": "Medium", "type": "hobby", "frequency": "daily",  "tags": "training,mental,tricks,focus"},
+    {"active": True, "name": "Sniff & Explore Walk",   "description": "Slow-paced walk focused on sniffing and exploring","duration": 25, "priority": 3, "energy": "Medium", "type": "hobby", "frequency": "daily",  "tags": "outdoor,sniff,explore,walk,enrichment"},
+    {"active": True, "name": "Cuddle & Calm Time",     "description": "Quiet bonding time on the couch",             "duration": 15, "priority": 4, "energy": "Low",    "type": "hobby",    "frequency": "as-needed",  "tags": "cuddle,indoor,calm,relax,cozy"},
 ]
 
 # ─── App setup ──────────────────────────────────────────────────────────────────
@@ -144,14 +144,16 @@ task_df = pd.DataFrame(st.session_state.tasks)
 edited = st.data_editor(
     task_df,
     column_config={
-        "active":   st.column_config.CheckboxColumn("Include",        default=True,                     width="small"),
-        "name":     st.column_config.TextColumn    ("Task Name",                                         width="medium"),
-        "duration": st.column_config.NumberColumn  ("Duration (min)", min_value=1,  max_value=480,       width="small"),
-        "priority": st.column_config.NumberColumn  ("Priority (1–5)", min_value=1,  max_value=5,         width="small",
-                                                    help="1 = critical / survival, 5 = optional bonus"),
-        "energy":   st.column_config.SelectboxColumn("Energy",        options=ENERGY_LEVELS,             width="small"),
-        "type":     st.column_config.SelectboxColumn("Type",          options=TASK_TYPES,                width="small"),
-        "tags":     st.column_config.TextColumn    ("Tags (comma-separated)",                            width="large"),
+        "active":      st.column_config.CheckboxColumn("Include",          default=True,                       width="small"),
+        "name":        st.column_config.TextColumn    ("Task Name",                                             width="medium"),
+        "description": st.column_config.TextColumn    ("Description",                                          width="large"),
+        "duration":    st.column_config.NumberColumn  ("Duration (min)",   min_value=1,  max_value=480,        width="small"),
+        "priority":    st.column_config.NumberColumn  ("Priority (1–5)",   min_value=1,  max_value=5,          width="small",
+                                                       help="1 = critical / survival, 5 = optional bonus"),
+        "energy":      st.column_config.SelectboxColumn("Energy",          options=ENERGY_LEVELS,              width="small"),
+        "type":        st.column_config.SelectboxColumn("Type",            options=TASK_TYPES,                 width="small"),
+        "frequency":   st.column_config.SelectboxColumn("Frequency",       options=FREQUENCY,                  width="small"),
+        "tags":        st.column_config.TextColumn    ("Tags (comma-separated)",                               width="large"),
     },
     hide_index=True,
     width="stretch",
@@ -181,11 +183,12 @@ if st.button("🐾  Generate Tail-Wagging Timeline", type="primary", width="stre
 
     # ── Pre-flight validation ────────────────────────────────────────────────────
     REQUIRED = {
-        "name":     "Task Name",
-        "duration": "Duration (min)",
-        "priority": "Priority (1–5)",
-        "energy":   "Energy",
-        "type":     "Type",
+        "name":      "Task Name",
+        "duration":  "Duration (min)",
+        "priority":  "Priority (1–5)",
+        "energy":    "Energy",
+        "type":      "Type",
+        "frequency": "Frequency",
     }
 
     def _is_blank(val):
@@ -217,13 +220,6 @@ if st.button("🐾  Generate Tail-Wagging Timeline", type="primary", width="stre
         st.stop()
     # ── End validation ───────────────────────────────────────────────────────────
 
-    pet   = Pet(name=pet_name, species=species, favorites=favorites, fears=fears)
-    owner = Owner(
-        name                   = owner_name,
-        available_time_minutes = int(available_time),
-        energy_battery         = energy_battery,
-    )
-
     def _cell(val, default):
         try:
             if pd.isna(val):
@@ -232,23 +228,29 @@ if st.button("🐾  Generate Tail-Wagging Timeline", type="primary", width="stre
             pass
         return val if val is not None else default
 
-    care_tasks: List[CareTask] = []
+    # Build Task objects
+    task_objects: List[Task] = []
     for t in st.session_state.tasks:
         active_val = t.get("active", True)
         if active_val is False or active_val == 0:
             continue
-        energy_val = str(_cell(t.get("energy"), "Medium"))
-        type_val   = str(_cell(t.get("type"),   "hobby"))
+        energy_val = str(_cell(t.get("energy"),    "Medium"))
+        type_val   = str(_cell(t.get("type"),       "hobby"))
+        freq_val   = str(_cell(t.get("frequency"),  "daily"))
         if energy_val not in ENERGY_LEVELS:
             energy_val = "Medium"
         if type_val not in TASK_TYPES:
             type_val = "hobby"
-        care_tasks.append(CareTask(
-            name             = str(_cell(t.get("name"), "Unnamed Task")),
-            duration_minutes = int(_cell(t.get("duration"), 15)),
+        if freq_val not in FREQUENCY:
+            freq_val = "daily"
+        task_objects.append(Task(
+            name             = str(_cell(t.get("name"),        "Unnamed Task")),
+            description      = str(_cell(t.get("description"), "")),
+            duration_minutes = int(_cell(t.get("duration"),    15)),
             priority         = min(5, max(1, int(_cell(t.get("priority"), 3)))),
             energy_level     = energy_val,
             task_type        = type_val,
+            frequency        = freq_val,
             tags             = [
                 x.strip()
                 for x in str(_cell(t.get("tags"), "")).split(",")
@@ -256,8 +258,14 @@ if st.button("🐾  Generate Tail-Wagging Timeline", type="primary", width="stre
             ],
         ))
 
-    scheduler                    = Scheduler(pet=pet, owner=owner, tasks=care_tasks)
-    scheduled, skipped, note     = scheduler.build_schedule()
+    # Build Pet → Owner → Scheduler hierarchy
+    pet   = Pet(name=pet_name, species=species, favorites=favorites, fears=fears,
+                tasks=task_objects)
+    owner = Owner(name=owner_name, available_time_minutes=int(available_time),
+                  energy_battery=energy_battery, pets=[pet])
+
+    scheduler                = Scheduler(owner=owner)
+    scheduled, skipped, note = scheduler.build_schedule()
 
     st.session_state.schedule = dict(
         scheduled      = scheduled,

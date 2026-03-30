@@ -127,3 +127,29 @@ classDiagram
 | **3. Score & rank** | Every remaining `CareTask` gets a float score: priority weight − energy-mismatch penalty + pet-favorites bonus − fear conflict penalty |
 | **4. Greedy fill** | Tasks are added in score order until `Owner.available_time_minutes` runs out; fear-conflicting tasks are skipped immediately |
 | **5. Output** | Returns `(List[ScheduledTask], List[SkippedTask], summary_note)` — each `ScheduledTask` carries a natural-language *Pet's Perspective* reason |
+
+---
+
+## Smarter Scheduling
+
+The scheduler was upgraded with eleven improvements that make daily planning more accurate, fair, and realistic.
+
+**Better task selection**
+
+The original greedy fill was replaced with a **0/1 knapsack algorithm** that evaluates all candidate tasks together and selects the combination that maximises total value within the available time — not just the first tasks that happen to fit. Tasks are scored **per minute** (score ÷ duration) so a short high-quality task is never buried by a long mediocre one. `daily` tasks also receive a score bonus over `weekly` or `as-needed` tasks, since missing a daily task has a higher cost.
+
+**Fairer multi-pet scheduling**
+
+Optional tasks are assigned in a **round-robin pass** across pets, so every animal gets at least one enrichment slot before any pet receives a second. Within each pet's queue, tasks are ordered by `preferred_time` (`"morning"` → `"afternoon"` → `"evening"`) to produce a schedule that follows a natural daily flow regardless of the order tasks were added.
+
+**Smarter filtering**
+
+Fear matching was upgraded from substring search to **whole-word token matching**, preventing false conflicts (e.g. a fear of `"loud"` no longer blocks a task tagged `"cloud"`). Tasks with a `next_due_date` in the future are automatically deferred and appear in the skipped list with the exact date they are next needed — useful for weekly grooming, monthly vet checks, and similar recurring care.
+
+**Automatic rescheduling**
+
+Calling `pet.complete_task(name)` marks a task done and immediately appends a **next-occurrence copy** to the pet's task list with the due date advanced by the correct interval (`+1 day` for daily, `+7 days` for weekly). `as-needed` tasks return `None` — no copy is created. The new instance is a full independent copy, so editing or completing it does not affect the original.
+
+**Guardrails and visibility**
+
+`Task.__post_init__` validates that `priority` is in the range 1–5 at construction time, raising a `ValueError` before a bad value can silently distort scoring. `Owner.all_tasks()` and `Pet.add_task()` deduplicate by object identity, so sharing a `Task` object across pets never produces a double-scheduled entry. After every `build_schedule()` call, `scheduler.warnings` holds plain-English alerts — including a budget warning when survival tasks alone exceed the owner's available time, and a free-time summary showing how many minutes remain.
